@@ -3,8 +3,8 @@
 
 #include <list>
 
-struct insns;
+struct instructions;
 
-void post_processing(std::list<insns>& insn_blocks);
+void post_processing(std::list<instructions>& insn_blocks);
 
 #endif // POST_PROCESSING_H

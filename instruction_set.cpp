@@ -1,24 +1,4 @@
-/*
-sh_insns - Renesas SH Instruction Set Summary
-
-Copyright (C) 2013-2015 Oleg Endo
-
-This is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3, or (at your option)
-any later version.
-
-This software is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this software; see the file LICENSE.  If not see
-<httdiv://www.gnu.org/licenses/>.
-
-*/
-
+#include <format>
 #include <iostream>
 #include <iomanip>
 #include <string_view>
@@ -36,15 +16,9 @@ using namespace std::string_view_literals;
 
 static isa_property display_name = isa_property
 {
-  SH1, "SH1",   // SH7032 / 7034 --Operating frequency 20MHz
-  SH2, "SH2",   // SH7604 --Operating frequency 28.7MHz
-  SH2E, "SH2E", // SH7206 (No Fpu)- Dhrystone 480MIPS/200MHz
-  SH2A, "SH2A", // SH7262 (with fpu) 345MIPS/144MHz
-  SH3, "SH3",   // SH7702/7708 - Action frequency 60MHz
-  SH3_FPU, "SH3E", // SH7718 - Action frequency 100MHz
-  SH4, "SH4",
-  SH4A, "SH4A",
-  SH1_DSP, "DSP" // SH7410 - Action frequency 60MHz
+  NMOS6502, "NMOS6502",
+  WDC65C02, "WDC65C02",
+  HuC6280, "HuC6280",
 };
 
 // ----------------------------------------------------------------------------
@@ -53,28 +27,35 @@ std::string fix_id(std::string data)
 {
   data = std::regex_replace(data, std::regex("<var[^>]+>([^<]+)</var>", std::regex_constants::extended),
                             "\\1", std::regex_constants::format_sed);
+
+  data = std::regex_replace(data, std::regex("[[:space:]]", std::regex_constants::extended),
+                            "", std::regex_constants::format_sed);
+  data = "code" + data;
   return data;
 }
 
 // ----------------------------------------------------------------------------
 
-std::string build_environments(std::list<environment_t> environments)
+std::string build_flags(const flags& farr)
 {
+  constexpr const char* const flag_ids = "NVTBDIZC";
+
   std::string rval;
-  for(const auto& env : environments)
+  int idx = 0;
+  for(auto& val : farr)
   {
-
-  }
-  return rval;
-}
-
-
-std::string build_citations(std::list<citation_t> citations)
-{
-  std::string rval;
-  for(const auto& cite : citations)
-  {
-
+    switch(val.index())
+    {
+    case 0:
+      rval.push_back('-');
+      break;
+    case 1:
+      rval.push_back(std::get<int>(val) ? '1' : '0');
+      break;
+    case 2:
+      rval.push_back(flag_ids[idx]);
+    }
+    idx++;
   }
   return rval;
 }
@@ -107,27 +88,17 @@ std::string regex_property_list(const isa_property& prop, const std::string& new
 }
 
 
-std::string build_isa_list (const insn& i)
+std::string build_isa_list (const mode_details& md)
 {
   static isa_property names = isa_property
   {
-    SH1, "SH1",
-    SH1_DSP, "SH1_DSP",
-    SH2, "SH2",
-    SH2_DSP, "SH2_DSP",
-    SH2E, "SH2E",
-    SH2A, "SH2A",
-    SH2A_FPU, "SH2A_FPU",
-    SH3, "SH3",
-    SH3_FPU, "SH3_FPU",
-    SH3_DSP, "SH3_DSP",
-    SH4, "SH4",
-    SH4A, "SH4A",
+    NMOS6502, "NMOS6502",
+    WDC65C02, "WDC65C02",
+    HuC6280, "HuC6280",
   };
-  constexpr static const std::array<isa, 12> list = { SH1, SH1_DSP, SH2, SH2_DSP,
-                                                      SH2E, SH2A, SH2A_FPU,
-                                                      SH3, SH3_FPU, SH3_DSP,
-                                                      SH4, SH4A };
+  constexpr static const std::array<isa, isa_count> list = { NMOS6502,
+                                                             WDC65C02,
+                                                             HuC6280 };
   auto func = [](bool match, const std::string_view& prop) -> std::string
   {
     if(match)
@@ -136,18 +107,15 @@ std::string build_isa_list (const insn& i)
   };
   std::string r;
   for(std::size_t pos = 0; pos < list.size(); ++pos)
-    r += func(i.for_isa(list[pos]), names[list[pos]]);
+    r += func(md.cpus & list[pos], names[list[pos]]);
   return r;
 }
 
-std::string build_isa_tagged_property_list (const insn& i, const isa_property& p)
+std::string build_isa_tagged_property_list (const mode_details& md, const isa_property& p)
 {
-  constexpr static const std::array<isa, 9> list = {
-                                                     SH1, SH2,
-                                                     SH2E, SH2A | SH2A_FPU, SH3,
-                                                     SH3_FPU, SH4, SH4A,
-                                                     SH1_DSP | SH2_DSP | SH3_DSP
-                                                   };
+  constexpr static const std::array<isa, isa_count> list = { NMOS6502,
+                                                             WDC65C02,
+                                                             HuC6280 };
   auto func = [](bool match, const std::string_view& prop) -> std::string
   {
     if(match && !prop.empty())
@@ -156,7 +124,7 @@ std::string build_isa_tagged_property_list (const insn& i, const isa_property& p
   };
   std::string r;
   for(std::size_t pos = 0; pos < list.size(); ++pos)
-    r += func(i.for_isa(list[pos]), p[list[pos]]);
+    r += func(md.cpus & list[pos], p[list[pos]]);
   return r;
 }
 
@@ -171,7 +139,7 @@ R"html(<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<title>Hitachi SuperH Instruction Set Summary</title>
+<title>HuC6280 Instruction Set Summary</title>
 <style>
 :root
 {
@@ -312,22 +280,13 @@ body
 
 input[id^="cb_" ]::after { content:attr(name); }
 
-#cb_SH1:checked  ~ label.SH1,
-#cb_SH2:checked  ~ label.SH2,
-#cb_SH2E:checked ~ label.SH2E,
-#cb_SH2A:checked ~ label.SH2A,
-#cb_SH2A:checked ~ label.SH2A_FPU,
-#cb_SH3:checked  ~ label.SH3,
-#cb_SH3E:checked ~ label.SH3_FPU,
-#cb_DSP:checked  ~ label.SH1_DSP,
-#cb_DSP:checked  ~ label.SH1_DSP,
-#cb_DSP:checked  ~ label.SH2_DSP,
-#cb_SH4:checked  ~ label.SH4,
-#cb_SH4A:checked ~ label.SH4A
+#cb_NMOS6502:checked ~ label.NMOS6502,
+#cb_WDC65C02:checked ~ label.WDC65C02,
+#cb_HuC6280:checked  ~ label.HuC6280,
 { display: inline-grid; }
-
+/*
 label.summary { display: none; }
-
+*/
 input[id^="cb_" ]
 {
   position: sticky;
@@ -336,6 +295,7 @@ input[id^="cb_" ]
 }
 
 input[id^="row"] { display: none; }
+
 input[id^="row"]:checked + label > .details
   { display: unset; }
 
@@ -391,7 +351,7 @@ label.summary:hover img,
 .summary
 {
   display: inline-grid;
-  grid-template-columns: 150px 240px 470px 150px 130px 120px 120px 110px;
+  grid-template-columns: 150px 240px 370px 180px 130px 290px;
 }
 
 /* all columns */
@@ -405,7 +365,7 @@ label.summary:hover img,
 {
   display: inline-grid !important;
   grid-gap: 2px;
-  grid-template-columns: 33px 33px 33px;
+  grid-template-columns: 65px;
   grid-template-rows: 13px 13px 13px;
   font-family: monospace;
   font-size: 11px;
@@ -424,63 +384,33 @@ label.summary:hover img,
   height: 13px;
 }
 
-.cpu_grid > var:nth-of-type(1):before { content:"SH1"  ; }
-.cpu_grid > var:nth-of-type(2):before { content:"SH2"  ; }
-.cpu_grid > var:nth-of-type(3):before { content:"SH2E" ; }
-.cpu_grid > var:nth-of-type(4):before { content:"SH2A" ; }
-.cpu_grid > var:nth-of-type(5):before { content:"SH3"  ; }
-.cpu_grid > var:nth-of-type(6):before { content:"SH3E" ; }
-.cpu_grid > var:nth-of-type(7):before { content:"SH4"  ; }
-.cpu_grid > var:nth-of-type(8):before { content:"SH4A" ; }
-.cpu_grid > var:nth-of-type(9):before { content:"DSP"  ; }
+.cpu_grid > var:nth-of-type(1):before { content:"6502"    ; }
+.cpu_grid > var:nth-of-type(2):before { content:"65C02"   ; }
+.cpu_grid > var:nth-of-type(3):before { content:"HuC6280" ; }
 
 
-#cb_SH1:checked  ~ .summary .cpu_grid > var:nth-of-type(1),
-#cb_SH2:checked  ~ .summary .cpu_grid > var:nth-of-type(2),
-#cb_SH2E:checked ~ .summary .cpu_grid > var:nth-of-type(3),
-#cb_SH2A:checked ~ .summary .cpu_grid > var:nth-of-type(4),
-#cb_SH3:checked  ~ .summary .cpu_grid > var:nth-of-type(5),
-#cb_SH3E:checked ~ .summary .cpu_grid > var:nth-of-type(6),
-#cb_SH4:checked  ~ .summary .cpu_grid > var:nth-of-type(7),
-#cb_SH4A:checked ~ .summary .cpu_grid > var:nth-of-type(8),
-#cb_DSP:checked  ~ .summary .cpu_grid > var:nth-of-type(9)
+#cb_NMOS6502:checked ~ .summary .cpu_grid > var:nth-of-type(1),
+#cb_WDC65C02:checked ~ .summary .cpu_grid > var:nth-of-type(2),
+#cb_HuC6280:checked  ~ .summary .cpu_grid > var:nth-of-type(3)
 { color: var(--grid-inactive-text-color); }
 
-#cb_SH1:checked  ~ .summary.SH1       .cpu_grid > var:nth-of-type(1),
-#cb_SH2:checked  ~ .summary.SH2       .cpu_grid > var:nth-of-type(2),
-#cb_SH2E:checked ~ .summary.SH2E      .cpu_grid > var:nth-of-type(3),
-#cb_SH2A:checked ~ .summary.SH2A      .cpu_grid > var:nth-of-type(4),
-#cb_SH2A:checked ~ .summary.SH2A_FPU  .cpu_grid > var:nth-of-type(4), /* show FPU instructions too */
-#cb_SH3:checked  ~ .summary.SH3       .cpu_grid > var:nth-of-type(5),
-#cb_SH3E:checked ~ .summary.SH3       .cpu_grid > var:nth-of-type(6),
-#cb_SH3E:checked ~ .summary.SH3_FPU   .cpu_grid > var:nth-of-type(6), /* show FPU instructions too */
-#cb_SH4:checked  ~ .summary.SH4       .cpu_grid > var:nth-of-type(7),
-#cb_SH4A:checked ~ .summary.SH4A      .cpu_grid > var:nth-of-type(8),
-#cb_DSP:checked  ~ .summary.SH1_DSP   .cpu_grid > var:nth-of-type(9), /* show DSP instructions too */
-#cb_DSP:checked  ~ .summary.SH2_DSP   .cpu_grid > var:nth-of-type(9),
-#cb_DSP:checked  ~ .summary.SH3_DSP   .cpu_grid > var:nth-of-type(9)
+#cb_NMOS6502:checked ~ .summary.NMOS6502     .cpu_grid > var:nth-of-type(1),
+#cb_WDC65C02:checked ~ .summary.WDC65C02     .cpu_grid > var:nth-of-type(2),
+#cb_HuC6280:checked  ~ .summary.HuC6280      .cpu_grid > var:nth-of-type(3)
 { color: var(--cpu-grid-active-text-color); }
 
-#cb_SH1:checked  ~ .summary.SH1       .cycle_grid > var:nth-of-type(1),
-#cb_SH2:checked  ~ .summary.SH2       .cycle_grid > var:nth-of-type(2),
-#cb_SH2E:checked ~ .summary.SH2E      .cycle_grid > var:nth-of-type(3),
-#cb_SH2A:checked ~ .summary.SH2A      .cycle_grid > var:nth-of-type(4),
-#cb_SH2A:checked ~ .summary.SH2A_FPU  .cycle_grid > var:nth-of-type(4), /* show FPU instructions too */
-#cb_SH3:checked  ~ .summary.SH3       .cycle_grid > var:nth-of-type(5),
-#cb_SH3E:checked ~ .summary.SH3       .cycle_grid > var:nth-of-type(6),
-#cb_SH3E:checked ~ .summary.SH3_FPU   .cycle_grid > var:nth-of-type(6), /* show FPU instructions too */
-#cb_SH4:checked  ~ .summary.SH4       .cycle_grid > var:nth-of-type(7),
-#cb_SH4A:checked ~ .summary.SH4A      .cycle_grid > var:nth-of-type(8),
-#cb_DSP:checked  ~ .summary.SH1_DSP   .cycle_grid > var:nth-of-type(9), /* show DSP instructions too */
-#cb_DSP:checked  ~ .summary.SH2_DSP   .cycle_grid > var:nth-of-type(9),
-#cb_DSP:checked  ~ .summary.SH3_DSP   .cycle_grid > var:nth-of-type(9)
+#cb_NMOS6502:checked ~ .summary.NMOS6502     .cycle_grid > var:nth-of-type(1),
+#cb_WDC65C02:checked ~ .summary.WDC65C02     .cycle_grid > var:nth-of-type(2),
+#cb_HuC6280:checked  ~ .summary.HuC6280      .cycle_grid > var:nth-of-type(3)
 { color: var(--cycle-grid-active-text-color); }
 
 /* styling for details section */
 .summary > .details
 {
   border: unset;
+/*
   display: none;
+*/
   padding: 10px calc(var(--table-width) - var(--details-width) - 30px) 10px 30px;
   width: var(--details-width);
 }
@@ -522,6 +452,8 @@ span[title="list"] > var
   display: list-item;
 }
 
+
+
 input[id="radio_math"]:checked ~ var[title="for all"]::before { content: "∀"; }
 
 input[id="radio_math"]:checked ~ .summary var[title="greater than or equal"]::before { content: "≤"; }
@@ -529,12 +461,12 @@ input[id="radio_math"]:checked ~ .summary var[title="less than or equal"]::befor
 input[id="radio_math"]:checked ~ .summary var[title="equality"]::before { content: "="; }
 input[id="radio_math"]:checked ~ .summary var[title="shift bits left"]::before { content: "«"; }
 input[id="radio_math"]:checked ~ .summary var[title="shift bits right"]::before { content: "»"; }
-input[id="radio_math"]:checked ~ .summary var[title="binary or"]::before { content: "∨"; }
-input[id="radio_math"]:checked ~ .summary var[title="binary and"]::before { content: "∧"; }
-input[id="radio_math"]:checked ~ .summary var[title="binary xor"]::before { content: "⊕"; }
-input[id="radio_math"]:checked ~ .summary var[title="binary not"]::before { content: "¬"; }
-input[id="radio_math"]:checked ~ .summary var[title="double prime"]::after { content: "″"; }
-input[id="radio_math"]:checked ~ .summary var[title="prime"]::after { content: "′"; }
+input[id="radio_C"]:checked ~ .summary var[title="logical or"]::before { content: "∩"; }
+input[id="radio_C"]:checked ~ .summary var[title="logical and"]::before { content: "∪"; }
+input[id="radio_math"]:checked ~ .summary var[title="bitwise or"]::before { content: "∨"; }
+input[id="radio_math"]:checked ~ .summary var[title="bitwise and"]::before { content: "∧"; }
+input[id="radio_math"]:checked ~ .summary var[title="bitwise xor"]::before { content: "⊻"; }
+input[id="radio_math"]:checked ~ .summary var[title="bitwise not"]::before { content: "∁"; }
 input[id="radio_math"]:checked ~ .summary var[title="subtract"]::before { content: "−"; }
 input[id="radio_math"]:checked ~ .summary var[title="square root"]::before { content: "√("; }
 input[id="radio_math"]:checked ~ .summary var[title="square root"]::after { content: ")"; }
@@ -542,19 +474,21 @@ input[id="radio_math"]:checked ~ .summary var[title="square root"]::after { cont
 input[id="radio_math"]:checked ~ .summary var[title="multiply"]::before { content: "×"; }
 input[id="radio_math"]:checked ~ .summary var[title="absolute value"]::before { content: "|"; }
 input[id="radio_math"]:checked ~ .summary var[title="absolute value"]::after { content: "|"; }
-
+input[id="radio_math"]:checked ~ .summary var[title="assignment"]::before { content: "←"; }
+input[id="radio_math"]:checked ~ .summary var[title="dereferenced"]::before { content: "deref("; }
+input[id="radio_math"]:checked ~ .summary var[title="dereferenced"]::after { content: ")"; }
 
 input[id="radio_C"]:checked ~ .summary var[title="greater than or equal"]::before { content: ">="; }
 input[id="radio_C"]:checked ~ .summary var[title="less than or equal"]::before { content: "<="; }
 input[id="radio_C"]:checked ~ .summary var[title="equality"]::before { content: "=="; }
 input[id="radio_C"]:checked ~ .summary var[title="shift bits left"]::before { content: "<<"; }
 input[id="radio_C"]:checked ~ .summary var[title="shift bits right"]::before { content: ">>"; }
-input[id="radio_C"]:checked ~ .summary var[title="binary or"]::before { content: "|"; }
-input[id="radio_C"]:checked ~ .summary var[title="binary and"]::before { content: "&"; }
-input[id="radio_C"]:checked ~ .summary var[title="binary xor"]::before { content: "^"; }
-input[id="radio_C"]:checked ~ .summary var[title="binary not"]::before { content: "~"; }
-input[id="radio_C"]:checked ~ .summary var[title="double prime"]::after { content: "’’"; }
-input[id="radio_C"]:checked ~ .summary var[title="prime"]::after { content: "’"; }
+input[id="radio_C"]:checked ~ .summary var[title="logical or"]::before { content: "||"; }
+input[id="radio_C"]:checked ~ .summary var[title="logical and"]::before { content: "&&"; }
+input[id="radio_C"]:checked ~ .summary var[title="bitwise or"]::before { content: "|"; }
+input[id="radio_C"]:checked ~ .summary var[title="bitwise and"]::before { content: "&"; }
+input[id="radio_C"]:checked ~ .summary var[title="bitwise xor"]::before { content: "^"; }
+input[id="radio_C"]:checked ~ .summary var[title="bitwise not"]::before { content: "~"; }
 input[id="radio_C"]:checked ~ .summary var[title="subtract"]::before { content: "-"; }
 input[id="radio_C"]:checked ~ .summary var[title="square root"]::before { content: "sqrt("; }
 input[id="radio_C"]:checked ~ .summary var[title="square root"]::after { content: ")"; }
@@ -562,20 +496,24 @@ input[id="radio_C"]:checked ~ .summary var[title="square root"]::after { content
 input[id="radio_C"]:checked ~ .summary var[title="multiply"]::before { content: "*"; }
 input[id="radio_C"]:checked ~ .summary var[title="absolute value"]::before { content: "abs("; }
 input[id="radio_C"]:checked ~ .summary var[title="absolute value"]::after { content: ")"; }
+input[id="radio_C"]:checked ~ .summary var[title="assignment"]::before { content: "="; }
 
+input[id="radio_C"]:checked ~ .summary var[title="dereferenced"]::before { content: "*("; }
+input[id="radio_C"]:checked ~ .summary var[title="dereferenced"]::after { content: ")"; }
 
 var[title="divide"]::before { content: "/"; }
 var[title="greater than"]::before { content: ">"; }
 var[title="less than"]::before { content: "<"; }
-var[title="store into (right)"]::before { content: "→"; }
-var[title="store into (left)"]::before { content: "←"; }
+
 var[title="add"]::before { content: "+"; }
+
+
 
 </style>
 </head>
 <body>
   <div id="header">
-    <span style="font-size:20px;font-weight:700">Hitachi SuperH Instruction Set Summary</span>
+    <span style="font-size:20px;font-weight:700">NEC HuC6280 Instruction Set Summary</span>
     <div style="float:right">Last updated: )html" << __DATE__ << " " << __TIME__ << R"html(</div>
     <br />
     <div style="float:right">
@@ -587,42 +525,27 @@ var[title="add"]::before { content: "+"; }
   <br />
   <select name="CPUtype">
     <option value="Grid">Show Grid</option>
-    <option value="SH1">SuperH 1</option>
-    <option value="SH2">SuperH 2</option>
-    <option value="SHDSP">SuperH DSP</option>
-    <option value="SH2E">SuperH 2E</option>
-    <option value="SH2A">SuperH 2A without FPU</option>
-    <option value="SH2A_FPU">SuperH 2A with FPU</option>
-
-    <option value="SH3">SuperH 3</option>
-    <option value="SH3_FPU">SuperH 3E (3 with FPU)</option>
-    <option value="SH3_DSP">SuperH 3-DSP</option>
+    <option value="NMOS6502">6502</option>
+    <option value="WDC65C02">65C02</option>
+    <option value="HuC6280">HuC6280</option>
   </select>
   <br />)html"
 
   << regex_property_list(display_name, "\n  <input type=\"checkbox\" id=\"cb_&\" name=\"&\" checked /><label for=\"cb_&\">&</label>")
 
-  << R"html(
+  << R"html(<br />
     <span id="table_header" class="summary)html" << regex_property_list(display_name, " &") << R"html(">
     <span>Compatibilty</span>
-    <span>Format</span>
+    <span>PCEAS Syntax</span>
     <span>Abstract</span>
-    <span>Code</span>
-    <span>Bit Flags</span>
-    <span>Instruction Group
-      <span class="cpu_grid"><var></var><var></var><var></var><var></var><var></var><var></var><var></var><var></var><var></var></span>
-    </span>
-    <span>Issue Cycles
-      <span class="cpu_grid"><var></var><var></var><var></var><var></var><var></var><var></var><var></var><var></var><var></var></span>
-    </span>
-    <span>Latency Cycles
-      <span class="cpu_grid"><var></var><var></var><var></var><var></var><var></var><var></var><var></var><var></var><var></var></span>
-    </span>
+    <span>Machine Code</span>
+    <span>Status Flags</span>
+    <span>Addressing Mode</span>
   </span>)html";
 
   try
   {
-    std::list<insns> insn_blocks;
+    std::list<instructions> insn_blocks;
     build_insn_blocks(insn_blocks);
     post_processing(insn_blocks);
 
@@ -633,32 +556,35 @@ var[title="add"]::before { content: "+"; }
 
       for (const auto& i : block)
       {
-        std::cout << "<input name=\"instruction\" type=\"radio\" id=\"row" << id << "\" />" << std::endl;
-        std::cout
-            << "<label class=\"summary" << build_isa_list(i) << "\" for=\"row" << id << "\">" << std::endl
-            << "<span class=\"cpu_grid\"><var></var><var></var><var></var><var></var><var></var><var></var><var></var><var></var><var></var></span>" << std::endl
-            << "<span>" << i.data<format>() << "</span>" << std::endl
-            << "<span>" << i.data<abstract>() << "</span>" << std::endl
-            << "<span id=\"" << fix_id(i.data<opcode>()) << "\" class=\"colorized\">" << i.data<opcode>() << "</span>" << std::endl
-            << "<span>" << i.data<flags>() << "</span>" << std::endl
-            << "<span class=\"cycle_grid\">" << build_isa_tagged_property_list (i, i.data<group>()) << "</span>" << std::endl
-            << "<span class=\"cycle_grid\">" << build_isa_tagged_property_list (i, i.data<issue>()) << "</span>" << std::endl
-            << "<span class=\"cycle_grid\">" << build_isa_tagged_property_list (i, i.data<latency>()) << "</span>" << std::endl
-            << "<span class=\"details\">" << std::endl;
+        for (const auto& md : i.data<std::list<mode_details>>())
+        {
+          std::cout << "<input name=\"instruction\" type=\"radio\" id=\"row" << id << "\" />" << std::endl;
+          std::cout
+              << "<label class=\"summary" << build_isa_list(md) << "\" for=\"row" << id << "\">" << std::endl
+              << "<span class=\"cpu_grid\"><var></var><var></var><var></var></span>" << std::endl
+              << "<span>" << md.pceas_syntax_string << "</span>" << std::endl
+              << "<span>" << md.abstract_string << "</span>" << std::endl
+              << "<span id=\"" << fix_id(md.machine) << "\" class=\"colorized\">" << md.machine << "</span>" << std::endl
+              << "<span>" << build_flags(i.data<flags>()) << "</span>" << std::endl
+              << "<span>" << md.address_mode_string << "</span>" << std::endl
+  //            << "<span class=\"cycle_grid\">" << build_isa_tagged_property_list (i, i.data<group>()) << "</span>" << std::endl
+  //            << "<span class=\"cycle_grid\">" << build_isa_tagged_property_list (i, i.data<issue>()) << "</span>" << std::endl
+  //            << "<span class=\"cycle_grid\">" << build_isa_tagged_property_list (i, i.data<latency>()) << "</span>" << std::endl
+              << "<span class=\"details\">" << std::endl;
 
-        std::cout << build_environments (i.data<environments>());
-        std::cout << build_citations (i.data<citations>());
-        std::cout << build_span_section (i.data<name>(), "note", i.data<description>());
-        std::cout << build_span_section ("Note", "note", i.data<note>());
-        std::cout << build_span_section ("Operation", "operation", i.data<operation>());
-        std::cout << build_span_section ("Example", "assembly", i.data<example>());
-        std::cout << build_span_section ("Possible Exceptions", "list", i.data<exceptions>());
+  //        std::cout << build_environments (i.data<environments>());
+  //        std::cout << build_citations (i.data<citations>());
+          std::cout << build_span_section (md.name_string, "summary", md.description_string);
+          std::cout << build_span_section ("Note", "note", i.data<note>());
+  //        std::cout << build_span_section ("Operation", "operation", i.data<operation>());
+  //        std::cout << build_span_section ("Example", "assembly", i.data<example>());
+  //        std::cout << build_span_section ("Possible Exceptions", "list", i.data<exceptions>());
 
-        std::cout << "</span>" << std::endl // close "details"
-                  << "</label>" << std::endl;
-        ++id;
+          std::cout << "</span>" << std::endl // close "details"
+                    << "</label>" << std::endl;
+          ++id;
+        }
       }
-//      break;
     }
 
     std::cout << "</body>" << std::endl

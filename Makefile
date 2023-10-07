@@ -12,7 +12,7 @@ CXX:=g++
 endif
 
 ifndef CPP_STANDARD
-  CPP_STANDARD:=-std=c++17
+  CPP_STANDARD:=-std=c++20
 endif
 
 ifndef C_STANDARD
@@ -44,11 +44,11 @@ endif
 
 # define what to build
 ifndef BINARY
-  BINARY=sh_insns
+  BINARY=huc6280_instruction_set
 endif
 
 SOURCES = \
-	sh_insns.cpp \
+	instruction_set.cpp \
 	build_instructions.cpp \
 	post_processing.cpp
 

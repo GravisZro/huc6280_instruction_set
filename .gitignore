@@ -1,3 +1,4 @@
 bin/
-sh_insns
+huc6280_instruction_set
 *.html
+*.pro.user
