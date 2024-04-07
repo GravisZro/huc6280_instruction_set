@@ -1,4 +1,5 @@
 bin/
 huc6280_instruction_set
 *.html
+*.o
 *.pro.user
